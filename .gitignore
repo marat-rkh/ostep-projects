@@ -1,0 +1,11 @@
+# Zig build artifacts
+zig-cache/
+zig-out/
+
+# Zig binary files
+*.o
+*.h
+*.so
+*.a
+*.exe
+*.dll
