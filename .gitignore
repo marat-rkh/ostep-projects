@@ -9,3 +9,5 @@ zig-out/
 *.a
 *.exe
 *.dll
+
+tests-out/
