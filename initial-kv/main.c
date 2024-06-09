@@ -36,10 +36,74 @@ void free_cmds(struct Cmd *cmds, int cmds_len) {
     free(cmds);
 }
 
+struct Entry {
+    int key;
+    char *value;
+    char *entry;
+};
+
+void load(FILE *storage, struct Entry **entries_ptr, int *entries_len) {
+    *entries_ptr = NULL;
+    *entries_len = 0;
+    if (storage == NULL) {
+        return;
+    }
+    char *line = NULL;
+    size_t line_len = 0;
+    ssize_t read;
+    while ((read = getline(&line, &line_len, storage)) != -1) {
+        if (read == 0) {
+            continue;
+        }
+        char *entry = line;
+        char *key_str = strsep(&line, ",");
+        char *value = line;
+        int key = atoi(key_str);
+        append_entry(entries_ptr, entries_len, key, value, entry);
+    }
+}
+
+// TODO implement srinking when size gets too big
+void append_entry(struct Entry **entries_ptr, int *entries_len, int key, char *value, char *entry) {
+    *entries_ptr = realloc(*entries_ptr, (*entries_len + 1) * sizeof(struct Entry));
+    (*entries_ptr)[*entries_len].key = key;
+    (*entries_ptr)[*entries_len].value = value;
+    (*entries_ptr)[*entries_len].entry = entry;
+    ++(*entries_len);
+}
+
+void remove_entry(struct Entry **entries_ptr, int *entries_len, int key) {
+    for (int i = 0; i < *entries_len; i++) {
+        if ((*entries_ptr)[i].key == key) {
+            free((*entries_ptr)[i].entry);
+            (*entries_ptr)[i].entry = NULL;
+            return;
+        }
+    }
+}
+
+void free_entries(struct Entry *entries, int entries_len) {
+    for (int i = 0; i < entries_len; i++) {
+        free(entries[i].entry);
+    }
+    free(entries);
+}
+
 int main(int argc, char const* argv[]) {
     if (argc < 2) {
         return 0;
     }
+
+    FILE *storage_file = fopen("kv.txt", "a+");
+    if (storage_file == NULL) {
+        printf("cannot open storage file\n");
+        return 1;
+    }
+    rewind(storage_file);
+    struct Entry *entries = NULL;
+    int entries_len = 0;
+    load(storage_file, &entries, &entries_len);
+
     const int cmds_len = argc - 1;
     struct Cmd *cmds = parse_cmds(argv + 1, cmds_len); 
     for (int i = 0; i < cmds_len; i++) {
@@ -60,6 +124,9 @@ int main(int argc, char const* argv[]) {
             printf("bad command\n");
         }
     }
+    // TODO store entries
     free_cmds(cmds, cmds_len);
+    free_entries(entries, entries_len);
+    fclose(storage_file);
     return 0;
 }
