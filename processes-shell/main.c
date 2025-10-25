@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define DEBUG_ENABLED 0
+#define DEBUG_ENABLED 1
 
 #if DEBUG_ENABLED
 #define DEBUG(fmt, ...) fprintf(stderr, "DEBUG: " fmt, ##__VA_ARGS__)
@@ -60,10 +60,52 @@ int tokenize(char*** tokensPtr, size_t* tokensLenPtr, char* line) {
     return 0;
 }
 
+#define PROCESS_CODE_FAILURE 1
+#define PROCESS_CODE_ERROR 2
+#define PROCESS_CODE_EXIT 3
+
+int process(char* line, char*** pathsPtr, size_t* pathsLenPtr) {
+    char** tokens = NULL;
+    size_t tokensLen = 0;
+    if (tokenize(&tokens, &tokensLen, line) != 0) {
+        return PROCESS_CODE_FAILURE;
+    }
+    int procStatus = 0;
+    if (tokensLen == 0) {
+    } else if (strcmp(tokens[0], "exit") == 0) {
+        if (tokensLen != 1) {
+            procStatus = PROCESS_CODE_ERROR;
+        } else {
+            procStatus = PROCESS_CODE_EXIT;
+        }
+    } else if (strcmp(tokens[0], "cd") == 0) {
+        if (tokensLen != 2 || chdir(tokens[1]) != 0) {
+            procStatus = PROCESS_CODE_ERROR;
+        }
+    } else if (strcmp(tokens[0], "path") == 0) {
+
+    } else {
+        int rcFork = fork();
+        if (rcFork < 0) {
+            procStatus = PROCESS_CODE_FAILURE;
+        } else if (rcFork == 0) {
+            execvp(tokens[0], tokens);
+        } else {
+            wait(NULL);
+        }
+    }
+    free(tokens);
+    return procStatus;
+}
+
+// TODO:
+// - Pressing arrows during input breaks the "exit" command
 int main(int argc, char** argv) {
     if (argc > 1) {
         // batch mode
     }
+    char** paths = NULL;
+    size_t pathsLen = 0;
     while (true) {
         printf("wish> ");
         char* line = NULL;
@@ -71,33 +113,16 @@ int main(int argc, char** argv) {
             reportError();
             return 1;
         }
-        char** tokens = NULL;
-        size_t tokensLen = 0;
-        if (tokenize(&tokens, &tokensLen, line) != 0) {
-            reportError();
-            free(line);
-            return 1;
-        }
-        
-        if (tokensLen == 1 && strcmp(tokens[0], "exit") == 0) {
-            free(tokens);
-            free(line);
-            return 0;
-        } else {
-            int rcFork = fork();
-            if (rcFork < 0) {
-                reportError();
-                free(tokens);
-                free(line);
-                return 1;
-            } else if (rcFork == 0) {
-                execvp(tokens[0], tokens);
-            }
-            wait(NULL);
-        }
-
-        free(tokens);
+        int procCode = process(line, &paths, &pathsLen);
         free(line);
+        if (procCode == PROCESS_CODE_FAILURE || procCode == PROCESS_CODE_ERROR) {
+            reportError();
+            if (procCode == PROCESS_CODE_FAILURE) {
+                return 1;
+            }
+        } else if (procCode == PROCESS_CODE_EXIT) {
+            return 0;
+        }
     }
     return 0;
 }
