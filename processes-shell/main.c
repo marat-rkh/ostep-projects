@@ -71,6 +71,22 @@ void freeList(char** headPtr, size_t len) {
     free(headPtr);
 }
 
+int findExecPath(char** execPath, char** paths, size_t pathsLen, char* execName) {
+    for (size_t i = 0; i < pathsLen; i++) {
+        char* candidatePath = NULL;
+        if (asprintf(&candidatePath, "%s/%s", paths[i], execName) == -1) {
+            return 1;
+        }
+        if (!access(candidatePath, X_OK)) {
+            *execPath = candidatePath;
+            return 0;
+        }
+        free(candidatePath);
+    }
+    *execPath = NULL;
+    return 0;
+}
+
 int process(char* line, char*** pathsPtr, size_t* pathsLenPtr) {
     char** tokens = NULL;
     size_t tokensLen = 0;
@@ -106,13 +122,22 @@ int process(char* line, char*** pathsPtr, size_t* pathsLenPtr) {
         *pathsPtr = newPaths;
         *pathsLenPtr = newPathsLen;
     } else {
-        int rcFork = fork();
-        if (rcFork < 0) {
+        char* execPath = NULL;
+        if (findExecPath(&execPath, *pathsPtr, *pathsLenPtr, tokens[0])) {
             procStatus = PROCESS_CODE_FAILURE;
-        } else if (rcFork == 0) {
-            execvp(tokens[0], tokens);
+        } else if (execPath == NULL) {
+            procStatus = PROCESS_CODE_ERROR;
         } else {
-            wait(NULL);
+            int rcFork = fork();
+            if (rcFork < 0) {
+                procStatus = PROCESS_CODE_FAILURE;
+            } else if (rcFork == 0) {
+                tokens[0] = execPath;
+                execvp(execPath, tokens);
+            } else {
+                wait(NULL);
+            }
+            free(execPath);
         }
     }
     free(tokens);
