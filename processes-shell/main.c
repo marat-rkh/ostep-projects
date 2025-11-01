@@ -64,6 +64,13 @@ int tokenize(char*** tokensPtr, size_t* tokensLenPtr, char* line) {
 #define PROCESS_CODE_ERROR 2
 #define PROCESS_CODE_EXIT 3
 
+void freeList(char** headPtr, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        free(headPtr[i]);
+    }
+    free(headPtr);
+}
+
 int process(char* line, char*** pathsPtr, size_t* pathsLenPtr) {
     char** tokens = NULL;
     size_t tokensLen = 0;
@@ -83,7 +90,21 @@ int process(char* line, char*** pathsPtr, size_t* pathsLenPtr) {
             procStatus = PROCESS_CODE_ERROR;
         }
     } else if (strcmp(tokens[0], "path") == 0) {
-
+        freeList(*pathsPtr, *pathsLenPtr);
+        char** newPaths = NULL;
+        size_t newPathsLen = tokensLen - 1;
+        if (newPathsLen) {
+            newPaths = malloc(newPathsLen * sizeof(char*));
+            if (!newPaths) {
+                procStatus = PROCESS_CODE_ERROR;
+            } else {
+                for (size_t i = 1; i < tokensLen; i++) {
+                    newPaths[i - 1] = strdup(tokens[i]);
+                }
+            }
+        }
+        *pathsPtr = newPaths;
+        *pathsLenPtr = newPathsLen;
     } else {
         int rcFork = fork();
         if (rcFork < 0) {
@@ -104,13 +125,19 @@ int main(int argc, char** argv) {
     if (argc > 1) {
         // batch mode
     }
-    char** paths = NULL;
-    size_t pathsLen = 0;
+    char** paths = malloc(sizeof(char*));
+    if (!paths) {
+        reportError();
+        return 1;
+    }
+    paths[0] = strdup("/bin");
+    size_t pathsLen = 1;
     while (true) {
         printf("wish> ");
         char* line = NULL;
         if (readUserInput(&line) != 0) {
             reportError();
+            freeList(paths, pathsLen);
             return 1;
         }
         int procCode = process(line, &paths, &pathsLen);
@@ -118,11 +145,14 @@ int main(int argc, char** argv) {
         if (procCode == PROCESS_CODE_FAILURE || procCode == PROCESS_CODE_ERROR) {
             reportError();
             if (procCode == PROCESS_CODE_FAILURE) {
+                freeList(paths, pathsLen);
                 return 1;
             }
         } else if (procCode == PROCESS_CODE_EXIT) {
+            freeList(paths, pathsLen);
             return 0;
         }
     }
+    freeList(paths, pathsLen);
     return 0;
 }
